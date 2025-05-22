@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-api-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-api-app
+  template:
+    metadata:
+      labels:
+        app: telegram-api-app
+    spec:
+      containers:
+      - name: telegram-api-container
+        image: microsm/micro-telegram-api
+        env:
+        - name: TELEGRAM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-secrets
+              key: token
+        - name: REDIS_URL
+          value: "redis:6379"
+        ports:
+        - containerPort: 8080
