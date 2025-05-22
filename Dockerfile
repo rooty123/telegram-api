@@ -18,8 +18,6 @@ FROM alpine:latest
 # Устанавливаем рабочую директорию
 WORKDIR /
 
-COPY ./migrations /migrations
-
 # Копируем бинарный файл из этапа builder
 COPY --from=builder /src/app .
 EXPOSE 8080
