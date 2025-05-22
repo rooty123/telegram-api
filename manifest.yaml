@@ -22,6 +22,6 @@ spec:
               name: telegram-secrets
               key: token
         - name: REDIS_URL
-          value: "redis:6379"
+          value: "redis-master:6379"
         ports:
         - containerPort: 8080
