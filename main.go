@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
@@ -17,9 +19,18 @@ var (
 	telegramToken  = os.Getenv("TELEGRAM_TOKEN")
 	redisURL       = os.Getenv("REDIS_URL")
 	userServiceURL = "http://user-service/users"
+	answersURL     = envOr("ANSWERS_URL", "http://answers/answers")
 	redisClient    *redis.Client
 	log            *logrus.Entry
+	httpClient     = &http.Client{Timeout: 3 * time.Second}
 )
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
 
 type User struct {
 	ChatID       int64  `json:"chatID"`
@@ -97,10 +108,76 @@ func main() {
 		return c.Send("Welcome!")
 	})
 
+	bot.Handle(telebot.OnText, handleIncomingText)
+	bot.Handle(telebot.OnSticker, replyTextOnly)
+	bot.Handle(telebot.OnVoice, replyTextOnly)
+	bot.Handle(telebot.OnPhoto, replyTextOnly)
+	bot.Handle(telebot.OnVideo, replyTextOnly)
+	bot.Handle(telebot.OnAudio, replyTextOnly)
+	bot.Handle(telebot.OnDocument, replyTextOnly)
+	bot.Handle(telebot.OnAnimation, replyTextOnly)
+	bot.Handle(telebot.OnVideoNote, replyTextOnly)
+
 	go subscribeToRedisEvents(bot)
 
 	log.Info("Starting telegram bot")
 	bot.Start()
+}
+
+type answerReq struct {
+	ChatID     int64  `json:"chat_id"`
+	TelegramID int64  `json:"telegram_id"`
+	Text       string `json:"text"`
+	SentAt     string `json:"sent_at"`
+}
+
+func handleIncomingText(c telebot.Context) error {
+	text := c.Text()
+	if strings.HasPrefix(text, "/") {
+		return nil // commands handled by their own handlers
+	}
+
+	req := answerReq{
+		ChatID:     c.Chat().ID,
+		TelegramID: c.Sender().ID,
+		Text:       text,
+		SentAt:     time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := postAnswerWithRetry(req); err != nil {
+		log.WithError(err).WithField("chat_id", req.ChatID).Error("Failed to forward answer")
+		return c.Send("Не получилось сохранить, попробуйте позже")
+	}
+	return c.Send("Записал")
+}
+
+func replyTextOnly(c telebot.Context) error {
+	return c.Send("Поддерживается только текст")
+}
+
+func postAnswerWithRetry(req answerReq) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	for attempt := 1; attempt <= 2; attempt++ {
+		resp, err := httpClient.Post(answersURL, "application/json", bytes.NewReader(body))
+		if err != nil {
+			if attempt == 2 {
+				return err
+			}
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+		if resp.StatusCode >= 500 && attempt == 1 {
+			continue
+		}
+		return fmt.Errorf("answers POST failed: status %d", resp.StatusCode)
+	}
+	return fmt.Errorf("answers POST exhausted retries")
 }
 
 func checkUserExists(chatID int64) (bool, error) {
