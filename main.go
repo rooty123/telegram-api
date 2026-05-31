@@ -20,6 +20,7 @@ var (
 	redisURL       = os.Getenv("REDIS_URL")
 	userServiceURL = "http://user-service/users"
 	answersURL     = envOr("ANSWERS_URL", "http://answers/answers")
+	webAdminURL    = envOr("WEB_ADMIN_URL", "http://web-admin/internal/token")
 	redisClient    *redis.Client
 	log            *logrus.Entry
 	httpClient     = &http.Client{Timeout: 3 * time.Second}
@@ -108,6 +109,7 @@ func main() {
 		return c.Send("Welcome!")
 	})
 
+	bot.Handle("/cabinet", handleCabinet)
 	bot.Handle(telebot.OnText, handleIncomingText)
 	bot.Handle(telebot.OnSticker, replyTextOnly)
 	bot.Handle(telebot.OnVoice, replyTextOnly)
@@ -153,6 +155,28 @@ func handleIncomingText(c telebot.Context) error {
 
 func replyTextOnly(c telebot.Context) error {
 	return c.Send("Поддерживается только текст")
+}
+
+type cabinetResp struct {
+	Link string `json:"link"`
+}
+
+func handleCabinet(c telebot.Context) error {
+	body, _ := json.Marshal(map[string]int64{"chat_id": c.Chat().ID})
+	resp, err := httpClient.Post(webAdminURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		log.WithError(err).WithField("chat_id", c.Chat().ID).Error("web-admin token request failed")
+		return c.Send("Кабинет временно недоступен, попробуйте позже")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return c.Send("Кабинет временно недоступен, попробуйте позже")
+	}
+	var out cabinetResp
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.Link == "" {
+		return c.Send("Кабинет временно недоступен, попробуйте позже")
+	}
+	return c.Send(fmt.Sprintf("Ваш кабинет: %s\n(ссылка действует 15 минут)", out.Link))
 }
 
 func postAnswerWithRetry(req answerReq) error {
