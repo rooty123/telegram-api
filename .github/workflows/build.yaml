@@ -30,6 +30,9 @@ jobs:
 
   deploy:
     runs-on: self-hosted
+    container:
+      image: bitnami/kubectl:latest
+      options: --user 1001
     needs: build
 
     steps:
@@ -38,9 +41,6 @@ jobs:
         with:
           clean: false
           set-safe-directory: false
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
 
       - name: Apply Manifest
         run: kubectl apply -f manifest.yaml
