@@ -30,10 +30,6 @@ jobs:
 
   deploy:
     runs-on: self-hosted
-    # container: bitnami/kubectl:latest
-    container:
-      image: bitnami/kubectl:latest 
-      options: --user 1001
     needs: build
 
     steps:
@@ -43,8 +39,11 @@ jobs:
           clean: false
           set-safe-directory: false
 
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
       - name: Apply Manifest
         run: kubectl apply -f manifest.yaml
 
       - name: Restart Deployment
-        run: kubectl rollout restart deployment telegram-api-deployment 
+        run: kubectl rollout restart deployment telegram-api-deployment
