@@ -43,7 +43,7 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Apply Manifest
-        run: kubectl apply -f manifest.yaml
+        run: kubectl apply -n default -f manifest.yaml
 
       - name: Restart Deployment
-        run: kubectl rollout restart deployment telegram-api-deployment
+        run: kubectl rollout restart -n default deployment telegram-api-deployment
