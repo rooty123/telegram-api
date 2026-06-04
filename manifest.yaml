@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: telegram-api-container
-        image: microsm/micro-telegram-api
+        image: microsm/micro-telegram-api:__IMAGE_TAG__
         env:
         - name: TELEGRAM_TOKEN
           valueFrom:
